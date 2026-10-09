@@ -1,11 +1,12 @@
 import jwt from 'jsonwebtoken';
 
 export const protect = (req, res, next) => {
-  let token = req.headers.authorization;
-
-  if (token && token.startsWith('Bearer')) {
+  const authorization = req.headers.authorization;
+  if (!process.env.JWT_SECRET) return res.status(503).json({ message: 'Authentication is not configured on this server' });
+  if (authorization && authorization.startsWith('Bearer ')) {
     try {
-      token = token.split(' ')[1];
+      const token = authorization.slice(7).trim();
+      if (!token) return res.status(401).json({ message: 'No token provided' });
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = decoded;
       next();

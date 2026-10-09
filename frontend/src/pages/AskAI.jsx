@@ -1,84 +1,48 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
+import { Link } from 'react-router-dom';
 import API from '../api';
+import { AuthContext } from '../context/AuthContext';
+
+const errorMessage = (err, fallback) => err.response?.data?.message || (err.code === 'ERR_NETWORK' ? 'The server is taking a break. Check your connection and try again.' : fallback);
 
 export default function AskAI() {
+  const { user } = useContext(AuthContext);
   const [doubt, setDoubt] = useState('');
   const [analysis, setAnalysis] = useState(null);
   const [tutors, setTutors] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [bookingId, setBookingId] = useState('');
+  const [notice, setNotice] = useState(null);
 
-  const handleAnalyze = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleAnalyze = async (event) => {
+    event.preventDefault(); setLoading(true); setNotice(null); setAnalysis(null); setTutors([]);
     try {
-      const { data } = await API.post('/ai/analyze', { doubt });
-      setAnalysis(data);
-
-      const tutorRes = await API.get(`/tutors?subject=${data.subject}`);
-      setTutors(tutorRes.data);
-    } catch (err) {
-      alert('Error analyzing doubt. Ensure you are logged in.');
-    } finally {
-      setLoading(false);
-    }
+      const { data } = await API.post('/ai/analyze', { doubt: doubt.trim() }); setAnalysis(data);
+      const tutorsResponse = await API.get('/tutors', { params: { subject: data.subject } }); setTutors(tutorsResponse.data);
+    } catch (err) { setNotice({ type: 'error', text: errorMessage(err, 'We couldn’t analyze that question. Please try again.') }); }
+    finally { setLoading(false); }
   };
 
   const bookTutor = async (tutor) => {
+    setBookingId(tutor._id); setNotice(null);
     try {
-      await API.post('/sessions/book', {
-        tutorId: tutor._id,
-        subject: analysis.subject,
-        topic: analysis.topic,
-        duration: 30,
-        scheduledAt: new Date(Date.now() + 86400000), // Tomorrow
-        fee: tutor.hourlyRate / 2,
-        doubtDescription: doubt
-      });
-      alert('Session Booked Successfully!');
-    } catch (err) {
-      alert('Failed to book session');
-    }
+      await API.post('/sessions/book', { tutorId: tutor._id, subject: analysis.subject, topic: analysis.topic, duration: 30, scheduledAt: new Date(Date.now() + 86400000).toISOString(), fee: (Number(tutor.hourlyRate) || 0) / 2, doubtDescription: doubt.trim() });
+      setNotice({ type: 'success', text: `Your session with ${tutor.name} is booked. Find the details in My sessions.` });
+    } catch (err) { setNotice({ type: 'error', text: errorMessage(err, 'We couldn’t book that session. Please try again.') }); }
+    finally { setBookingId(''); }
   };
 
-  return (
-    <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-      <h2>Ask Gemini AI & Match Tutors</h2>
-      <form onSubmit={handleAnalyze}>
-        <textarea
-          rows="4"
-          style={{ width: '100%', padding: '10px' }}
-          placeholder="Describe your doubt or question..."
-          value={doubt}
-          onChange={(e) => setDoubt(e.target.value)}
-          required
-        />
-        <button type="submit" disabled={loading} style={{ marginTop: '10px', padding: '10px 20px' }}>
-          {loading ? 'Analyzing...' : 'Analyze Doubt'}
-        </button>
-      </form>
-
-      {analysis && (
-        <div style={{ marginTop: '20px', border: '1px solid #ccc', padding: '15px', borderRadius: '8px' }}>
-          <h3>AI Analysis Breakdown</h3>
-          <p><strong>Subject:</strong> {analysis.subject}</p>
-          <p><strong>Topic:</strong> {analysis.topic}</p>
-          <p><strong>Difficulty Level:</strong> {analysis.difficulty}</p>
-          <h4>Initial Explanation:</h4>
-          <p>{analysis.initialExplanation}</p>
-
-          <h3 style={{ marginTop: '20px' }}>Recommended Tutors for {analysis.subject}</h3>
-          {tutors.length === 0 ? <p>No specific tutors found for this subject.</p> : (
-            <ul>
-              {tutors.map((t) => (
-                <li key={t._id} style={{ marginBottom: '10px' }}>
-                  <strong>{t.name}</strong> - ${t.hourlyRate}/hr | Bio: {t.bio}
-                  <button onClick={() => bookTutor(t)} style={{ marginLeft: '10px' }}>Book 30m Session</button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </div>
-  );
+  return <div className="learning-page">
+    <section className="welcome-row"><div><p className="eyebrow"><span className="eyebrow-spark">✳</span> YOUR PERSONAL STUDY SPACE</p><h1>Hey, {user?.name?.split(' ')[0] || 'there'}.<br/><span>What are we figuring out?</span></h1><p className="page-lede">Ask a question. Get a clear starting point. Find a tutor when you need one.</p></div><div className="welcome-art" aria-hidden="true"><span className="art-sun">✳</span><span className="art-loop">↗</span><span className="art-caption">STAY<br/>CURIOUS</span></div></section>
+    <section className="question-card"><div className="card-heading"><span className="step-number">01</span><div><h2>Start with your question</h2><p>Share what’s confusing you. The more detail, the better the guidance.</p></div></div>
+      <form onSubmit={handleAnalyze} className="question-form"><label className="sr-only" htmlFor="doubt">Your question</label><textarea id="doubt" rows="5" maxLength="2000" placeholder="For example: I understand what a derivative is, but I don’t get why the chain rule works…" value={doubt} onChange={(e) => setDoubt(e.target.value)} required/><div className="question-controls"><span className="character-count">{doubt.length}/2000</span><button className="button button-primary" type="submit" disabled={loading || !doubt.trim()}>{loading ? <><span className="spinner"/> Thinking it through…</> : <>Help me understand <span aria-hidden="true">→</span></>}</button></div></form>
+      <div className="privacy-note"><span>✦</span> Your question is used to prepare this learning session.</div>
+    </section>
+    {notice && <div className={`notice notice-${notice.type}`} role={notice.type === 'error' ? 'alert' : 'status'}>{notice.text}{notice.type === 'success' && <> <Link to="/dashboard">View sessions →</Link></>}</div>}
+    {analysis && <section className="results-grid" aria-live="polite"><article className="answer-card"><div className="result-overline"><span className="result-icon">✳</span> YOUR STARTING POINT</div><div className="topic-tags"><span>{analysis.subject}</span><span>{analysis.difficulty} level</span></div><h2>{analysis.topic}</h2><p className="answer-text">{analysis.initialExplanation}</p><div className="answer-foot"><span className="answer-bulb">✧</span><span>Use this as a starting point. Keep asking questions as you learn.</span></div></article>
+      <section className="tutors-card"><div className="tutor-heading"><div><p className="eyebrow">LEARN TOGETHER</p><h2>Need a human touch?</h2></div><span className="tutor-count">{tutors.length.toString().padStart(2, '0')}</span></div><p className="tutor-subtitle">Tutors who can help with {analysis.subject}.</p>
+        {tutors.length === 0 ? <div className="empty-tutors"><span>☼</span><p>No tutors listed for this subject just yet.</p><small>Try another question later. We’re growing our community.</small></div> : <div className="tutor-list">{tutors.map((tutor) => <article className="tutor-item" key={tutor._id}><div className="tutor-avatar">{tutor.name?.charAt(0).toUpperCase()}</div><div className="tutor-info"><h3>{tutor.name}</h3><p>{tutor.bio || `Ready to help with ${analysis.subject}`}</p><span className="tutor-rate">${Number(tutor.hourlyRate || 0)}/hr</span></div><button className="button button-outline button-book" type="button" onClick={() => bookTutor(tutor)} disabled={Boolean(bookingId)}>{bookingId === tutor._id ? 'Booking…' : 'Book 30m'}</button></article>)}</div>}
+      </section></section>}
+    <div className="bottom-tip"><span>✳</span><p><strong>Learning tip</strong> — Explaining what you already understand is a great way to find the next question.</p></div>
+  </div>;
 }
