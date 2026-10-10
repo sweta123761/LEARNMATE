@@ -28,7 +28,7 @@ function AppRoutes() {
     <Route path="/" element={<ProtectedRoute><AskAI /></ProtectedRoute>} />
     <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
     <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
-    <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
+    <Route path="/register" element={<Register />} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></main><footer className="site-footer"><span>Learn at your own pace.</span><span>Made for curious minds <span className="footer-star">✳</span></span></footer></>;
 }
