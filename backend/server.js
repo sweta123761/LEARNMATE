@@ -10,8 +10,22 @@ import sessionRoutes from './routes/sessionRoutes.js';
 
 const app = express();
 
+// Vercel preview deployments have their own origin, separate from the stable
+// production domain. FRONTEND_URL can contain a comma-separated allowlist.
+const frontendOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
+  origin: (origin, callback) => {
+    // Requests without an Origin header (for example, server-to-server calls)
+    // are not subject to browser CORS checks.
+    if (!origin || frontendOrigins.length === 0 || frontendOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
   credentials: true
 }));
 app.use(express.json());
