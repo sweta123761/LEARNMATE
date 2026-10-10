@@ -13,7 +13,7 @@ Provide a response in strict JSON format with keys:
 - "initialExplanation": short concise direct answer explaining the core concept (3-4 sentences)`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: prompt,
       config: { responseMimeType: 'application/json' }
     });
