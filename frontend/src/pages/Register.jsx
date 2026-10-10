@@ -4,12 +4,13 @@ import API from '../api';
 import { AuthContext } from '../context/AuthContext';
 
 export default function Register() {
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'student', subjects: '', hourlyRate: '', bio: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'student', subjects: '', hourlyRate: '', bio: '', weeklyAvailability: [] });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { login } = useContext(AuthContext);
   const update = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+  const updateAvailability = (index, key, value) => setForm((current) => ({ ...current, weeklyAvailability: current.weeklyAvailability.map((slot, slotIndex) => slotIndex === index ? { ...slot, [key]: value } : slot) }));
 
   const handleSubmit = async (event) => {
     event.preventDefault(); setError(''); setLoading(true);
@@ -18,6 +19,7 @@ export default function Register() {
       if (form.role === 'tutor') {
         payload.subjects = form.subjects.split(',').map((subject) => subject.trim()).filter(Boolean);
         payload.hourlyRate = Number(form.hourlyRate) || 0;
+        payload.timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
       } else {
         delete payload.subjects; delete payload.hourlyRate; delete payload.bio;
       }
@@ -36,7 +38,7 @@ export default function Register() {
         <label htmlFor="register-email">Email address</label><input id="register-email" name="email" type="email" autoComplete="email" placeholder="you@example.com" value={form.email} onChange={update} required />
         <label htmlFor="register-password">Create a password</label><input id="register-password" name="password" type="password" autoComplete="new-password" placeholder="At least 8 characters" value={form.password} onChange={update} minLength="8" required />
         <label htmlFor="register-role">I’m here to</label><select id="register-role" name="role" value={form.role} onChange={update}><option value="student">Learn something new</option><option value="tutor">Teach and mentor</option></select>
-        {form.role === 'tutor' && <><label htmlFor="register-subjects">What can you teach?</label><input id="register-subjects" name="subjects" type="text" placeholder="Math, Physics, Writing" value={form.subjects} onChange={update} required /><label htmlFor="register-rate">Hourly rate (USD)</label><input id="register-rate" name="hourlyRate" type="number" min="0" max="10000" step="1" placeholder="25" value={form.hourlyRate} onChange={update} required /><label htmlFor="register-bio">A little about you</label><textarea id="register-bio" name="bio" rows="3" maxLength="500" placeholder="Your teaching experience and style…" value={form.bio} onChange={update} required /> </>}
+        {form.role === 'tutor' && <><label htmlFor="register-subjects">What can you teach?</label><input id="register-subjects" name="subjects" type="text" placeholder="Math, Physics, Writing" value={form.subjects} onChange={update} required /><label htmlFor="register-rate">Hourly rate (USD)</label><input id="register-rate" name="hourlyRate" type="number" min="0" max="10000" step="1" placeholder="25" value={form.hourlyRate} onChange={update} required /><label htmlFor="register-bio">A little about you</label><textarea id="register-bio" name="bio" rows="3" maxLength="500" placeholder="Your teaching experience and style…" value={form.bio} onChange={update} required /><label>Weekly availability</label><p className="availability-help">Add the days and times you can tutor. Times use your device time zone.</p>{form.weeklyAvailability.map((slot, index) => <div className="availability-row" key={index}><select aria-label={`Availability day ${index + 1}`} value={slot.dayOfWeek} onChange={(event) => updateAvailability(index, 'dayOfWeek', event.target.value)} required><option value="">Day</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select><input aria-label={`Availability start time ${index + 1}`} type="time" value={slot.startTime} onChange={(event) => updateAvailability(index, 'startTime', event.target.value)} required /><span>to</span><input aria-label={`Availability end time ${index + 1}`} type="time" value={slot.endTime} onChange={(event) => updateAvailability(index, 'endTime', event.target.value)} required /><button type="button" className="availability-remove" aria-label="Remove availability" onClick={() => setForm((current) => ({ ...current, weeklyAvailability: current.weeklyAvailability.filter((_, slotIndex) => slotIndex !== index) }))}>×</button></div>)}<button type="button" className="availability-add" onClick={() => setForm((current) => ({ ...current, weeklyAvailability: [...current.weeklyAvailability, { dayOfWeek: '', startTime: '', endTime: '' }] }))}>+ Add availability window</button></>}
         <button className="button button-primary button-full" type="submit" disabled={loading}>{loading ? <><span className="spinner"/> Creating your account…</> : <>Create account <span aria-hidden="true">→</span></>}</button>
       </form>
       <p className="auth-switch">Already have an account? <Link to="/login">Log in <span aria-hidden="true">↗</span></Link></p>

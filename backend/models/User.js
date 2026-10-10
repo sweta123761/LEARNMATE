@@ -10,7 +10,14 @@ const userSchema = new mongoose.Schema({
   hourlyRate: { type: Number, default: 0 },
   bio: { type: String, default: '' },
   rating: { type: Number, default: 5.0 },
-  availability: [{ type: String }] // e.g. ["Monday 10:00 AM - 12:00 PM"]
+  reviewCount: { type: Number, default: 0 },
+  timeZone: { type: String, default: 'UTC' },
+  weeklyAvailability: [{
+    dayOfWeek: { type: Number, min: 0, max: 6, required: true },
+    startTime: { type: String, required: true, match: /^([01]\d|2[0-3]):[0-5]\d$/ },
+    endTime: { type: String, required: true, match: /^([01]\d|2[0-3]):[0-5]\d$/ }
+  }],
+  availability: [{ type: String }]
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);

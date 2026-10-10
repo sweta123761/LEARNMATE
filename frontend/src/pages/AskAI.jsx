@@ -4,6 +4,13 @@ import API from '../api';
 import { AuthContext } from '../context/AuthContext';
 
 const errorMessage = (err, fallback) => err.response?.data?.message || (err.code === 'ERR_NETWORK' ? 'The server is taking a break. Check your connection and try again.' : fallback);
+const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const localDateTimeMin = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+const availabilityText = (tutor) => {
+  const slots = tutor.weeklyAvailability || [];
+  if (!slots.length) return 'Availability not listed';
+  return slots.map((slot) => `${weekdayNames[slot.dayOfWeek]} ${slot.startTime}-${slot.endTime}`).join(', ');
+};
 
 export default function AskAI() {
   const { user } = useContext(AuthContext);
@@ -13,6 +20,9 @@ export default function AskAI() {
   const [showingAllTutors, setShowingAllTutors] = useState(false);
   const [loading, setLoading] = useState(false);
   const [bookingId, setBookingId] = useState('');
+  const [bookingTutor, setBookingTutor] = useState('');
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [duration, setDuration] = useState(30);
   const [notice, setNotice] = useState(null);
 
   const handleAnalyze = async (event) => {
@@ -50,7 +60,9 @@ export default function AskAI() {
     }
   };
 
-  const bookTutor = async (tutor) => {
+  const bookTutor = async (event, tutor) => {
+    event.preventDefault();
+    if (!scheduledAt) return;
     setBookingId(tutor._id);
     setNotice(null);
     try {
@@ -58,12 +70,12 @@ export default function AskAI() {
         tutorId: tutor._id,
         subject: analysis.subject,
         topic: analysis.topic,
-        duration: 30,
-        scheduledAt: new Date(Date.now() + 86400000).toISOString(),
-        fee: (Number(tutor.hourlyRate) || 0) / 2,
+        duration: Number(duration),
+        scheduledAt: new Date(scheduledAt).toISOString(),
         doubtDescription: doubt.trim(),
       });
       setNotice({ type: 'success', text: `Your session with ${tutor.name} is booked. Find the details in My sessions.` });
+      setBookingTutor('');
     } catch (err) {
       setNotice({ type: 'error', text: errorMessage(err, 'We could not book that session. Please try again.') });
     } finally {
@@ -80,7 +92,7 @@ export default function AskAI() {
     {notice && <div className={`notice notice-${notice.type}`} role={notice.type === 'error' ? 'alert' : 'status'}>{notice.text}{notice.type === 'success' && <> <Link to="/dashboard">View sessions &#8594;</Link></>}</div>}
     {analysis && <section className="results-grid" aria-live="polite"><article className="answer-card"><div className="result-overline"><span className="result-icon">&#10033;</span> YOUR STARTING POINT</div><div className="topic-tags"><span>{analysis.subject}</span><span>{analysis.difficulty} level</span></div><h2>{analysis.topic}</h2><p className="answer-text">{analysis.initialExplanation}</p><div className="answer-foot"><span className="answer-bulb">&#10023;</span><span>Use this as a starting point. Keep asking questions as you learn.</span></div></article>
       <section className="tutors-card"><div className="tutor-heading"><div><p className="eyebrow">LEARN TOGETHER</p><h2>Need a human touch?</h2></div><span className="tutor-count">{tutors.length.toString().padStart(2, '0')}</span></div><p className="tutor-subtitle">{showingAllTutors ? `No exact ${analysis.subject} match yet - browse all tutors.` : `Tutors who can help with ${analysis.subject}.`}</p>
-        {tutors.length === 0 ? <div className="empty-tutors"><span>&#9788;</span><p>No tutor profiles yet.</p><small>Be the first to share your knowledge and help a learner.</small><Link className="button button-outline button-book tutor-join" to="/register">Join as a tutor &#8599;</Link></div> : <div className="tutor-list">{tutors.map((tutor) => <article className="tutor-item" key={tutor._id}><div className="tutor-avatar">{tutor.name?.charAt(0).toUpperCase()}</div><div className="tutor-info"><h3>{tutor.name}</h3><p>{tutor.bio || `Ready to help with ${analysis.subject}`}</p><span className="tutor-rate">${Number(tutor.hourlyRate || 0)}/hr</span></div><button className="button button-outline button-book" type="button" onClick={() => bookTutor(tutor)} disabled={Boolean(bookingId)}>{bookingId === tutor._id ? 'Booking...' : 'Book 30m'}</button></article>)}</div>}
+        {tutors.length === 0 ? <div className="empty-tutors"><span>&#9788;</span><p>No tutor profiles yet.</p><small>Be the first to share your knowledge and help a learner.</small><Link className="button button-outline button-book tutor-join" to="/register">Join as a tutor &#8599;</Link></div> : <div className="tutor-list">{tutors.map((tutor) => <article className="tutor-item" key={tutor._id}><div className="tutor-avatar">{tutor.name?.charAt(0).toUpperCase()}</div><div className="tutor-info"><h3>{tutor.name}</h3><p>{tutor.bio || `Ready to help with ${analysis.subject}`}</p><span className="tutor-rate">${Number(tutor.hourlyRate || 0)}/hr {tutor.reviewCount ? `· ${Number(tutor.rating).toFixed(1)} ★ (${tutor.reviewCount} reviews)` : '· New tutor'}</span><p className="tutor-availability">{availabilityText(tutor)} {tutor.timeZone ? `(${tutor.timeZone})` : ''}</p></div><button className="button button-outline button-book" type="button" onClick={() => { setBookingTutor(bookingTutor === tutor._id ? '' : tutor._id); setScheduledAt(''); setDuration(30); setNotice(null); }} disabled={Boolean(bookingId)}>{bookingId === tutor._id ? 'Booking...' : bookingTutor === tutor._id ? 'Close' : 'Book session'}</button>{bookingTutor === tutor._id && <form className="booking-form" onSubmit={(event) => bookTutor(event, tutor)}><label>Start time <input type="datetime-local" min={localDateTimeMin()} value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} required /></label><label>Length <select value={duration} onChange={(event) => setDuration(Number(event.target.value))}><option value="30">30 minutes</option><option value="60">60 minutes</option></select></label><span className="booking-total">Total: ${((Number(tutor.hourlyRate) || 0) * Number(duration) / 60).toFixed(2)}</span><button className="button button-primary button-book-submit" type="submit" disabled={Boolean(bookingId)}>{bookingId === tutor._id ? 'Booking...' : 'Confirm booking'}</button></form>}</article>)}</div>}
       </section></section>}
     <div className="bottom-tip"><span>&#10033;</span><p><strong>Learning tip</strong> - Explaining what you already understand is a great way to find the next question.</p></div>
   </div>;
